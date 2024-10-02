@@ -174,5 +174,4 @@ async def delete_product(product_id: int, token: str = Depends(oauth2_scheme), d
     return {"message": "Product deleted successfully"}
 
 
-if __name__ == '__main__':
-    createAdmin()
+createAdmin()
