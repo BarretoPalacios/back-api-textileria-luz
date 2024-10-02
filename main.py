@@ -11,11 +11,17 @@ import shutil
 import os
 from fastapi import File, UploadFile
 from fastapi.staticfiles import StaticFiles
+from create_admin import createAdmin
 
 app = FastAPI()
+
 Base.metadata.create_all(bind=engine)
-app.mount("/uploads", StaticFiles(directory="uploads"), name="uploads")
 UPLOAD_FOLDER = "./uploads/"
+app.mount("/uploads", StaticFiles(directory="uploads"), name="uploads")
+
+
+
+
 
 # Crear la carpeta de imágenes si no existe
 if not os.path.exists(UPLOAD_FOLDER):
@@ -166,3 +172,7 @@ async def delete_product(product_id: int, token: str = Depends(oauth2_scheme), d
     db.delete(db_product)
     db.commit()
     return {"message": "Product deleted successfully"}
+
+
+if __name__ == '__main__':
+    createAdmin()
