@@ -11,16 +11,15 @@ import shutil
 import os
 from fastapi import File, UploadFile
 from fastapi.staticfiles import StaticFiles
-from create_admin import createAdmin
+from create_admin import create_admin
 
 app = FastAPI()
 
 Base.metadata.create_all(bind=engine)
+
+
 UPLOAD_FOLDER = "./uploads/"
 app.mount("/uploads", StaticFiles(directory="uploads"), name="uploads")
-
-
-
 
 
 # Crear la carpeta de imágenes si no existe
@@ -62,8 +61,11 @@ def get_db():
     db = SessionLocal()
     try:
         yield db
+        
     finally:
         db.close()
+
+
 
 @app.post("/token",tags=["Login"])
 async def login_for_access_token(form_data: OAuth2PasswordRequestForm = Depends(), db: Session = Depends(get_db)):
@@ -174,4 +176,4 @@ async def delete_product(product_id: int, token: str = Depends(oauth2_scheme), d
     return {"message": "Product deleted successfully"}
 
 
-createAdmin()
+create_admin()

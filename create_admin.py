@@ -9,9 +9,16 @@ Base.metadata.create_all(bind=engine)
 # Crear sesión
 db: Session = SessionLocal()
 
-def createAdmin():
-    # Crear un usuario administrador manualmente
-    hashed_password = get_password_hash("123")  # Cambia "your_password" por la contraseña deseada
+def create_admin():
+    # Verificar si ya existe un usuario administrador
+    existing_admin = db.query(User).filter(User.username == "admin").first()
+    
+    if existing_admin:
+        print("Admin user already exists.")
+        return
+    
+    # Crear un usuario administrador manualmente si no existe
+    hashed_password = get_password_hash("123")  # Cambia "123" por la contraseña deseada
     admin_user = User(
         username="admin",
         email="admin@example.com",
@@ -25,6 +32,3 @@ def createAdmin():
     db.refresh(admin_user)
 
     print(f"Admin user created: {admin_user.username}")
-
-    # Cerrar la sesión
-    db.close()
