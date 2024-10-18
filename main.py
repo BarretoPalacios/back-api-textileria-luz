@@ -1,4 +1,4 @@
-from fastapi import FastAPI, Depends, HTTPException, status
+from fastapi import FastAPI, Depends, HTTPException, status,Form
 from sqlalchemy.orm import Session
 from fastapi.security import OAuth2PasswordRequestForm
 from auth import verify_password, get_password_hash, create_access_token, oauth2_scheme, verify_token
@@ -12,11 +12,25 @@ import os
 from fastapi import File, UploadFile
 from fastapi.staticfiles import StaticFiles
 from create_admin import create_admin
+from fastapi.middleware.cors import CORSMiddleware
 
 app = FastAPI()
 
 Base.metadata.create_all(bind=engine)
 
+origins = [
+    "http://localhost:5173",
+    "*",# Permitir acceso desde cualquier dominio (usarlo con precaución)
+]
+
+# Añadir el middleware de CORS
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=origins,  # Permitir estos orígenes
+    allow_credentials=True,
+    allow_methods=["*"],  # Permitir todos los métodos (GET, POST, etc.)
+    allow_headers=["*"],   # Permitir todos los encabezados
+)
 
 UPLOAD_FOLDER = "./uploads/"
 app.mount("/uploads", StaticFiles(directory="uploads"), name="uploads")
@@ -65,7 +79,25 @@ def get_db():
     finally:
         db.close()
 
+@app.get("/userme", tags=["usuarios"])
+async def get_current_user(token: str = Depends(oauth2_scheme), db: Session = Depends(get_db)):
+    # Verifica el token y obtiene el nombre de usuario
+    username = verify_token(token)  
+    user = db.query(User).filter(User.username == username).first()
+    
+    if not user:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, 
+            detail="User not found"
+        )
 
+    # Devuelve información relevante del usuario (como su rol y correo)
+    return {
+        "id": user.id,
+        "username": user.username,
+        "email": user.email,
+        "role": user.role
+    }
 
 @app.post("/token",tags=["Login"])
 async def login_for_access_token(form_data: OAuth2PasswordRequestForm = Depends(), db: Session = Depends(get_db)):
@@ -78,13 +110,13 @@ async def login_for_access_token(form_data: OAuth2PasswordRequestForm = Depends(
 
 @app.post("/products/", response_model=ProductResponse,tags=["productos"])
 async def create_product(
-    name: str,
-    description: str,
-    price: float,
-    sizes: str,
-    colors: str,
-    category : str,
-    stock:int,
+    name: str = Form(...),
+    description: str = Form(...),
+    price: float = Form(...),
+    sizes: str = Form(...),
+    colors: str = Form(...),
+    category : str = Form(...),
+    stock:int = Form(...),
     image: UploadFile = File(...),  # Recibir el archivo de imagen
     token: str = Depends(oauth2_scheme),
     db: Session = Depends(get_db)
@@ -146,19 +178,66 @@ async def search_products(skip: int = 0, limit: int = 10,
     return products_query.all()
 
 # Actualizar un producto
-@app.put("/products/{product_id}", response_model=ProductResponse,tags=["productos"])
-async def update_product(product_id: int, product: ProductUpdate, token: str = Depends(oauth2_scheme), db: Session = Depends(get_db)):
+import shutil
+from fastapi import UploadFile, File, HTTPException, Depends, status, Form
+from sqlalchemy.orm import Session
+
+UPLOAD_FOLDER = "./uploads/"  # Ruta donde se guardarán las imágenes
+
+# Actualizar un producto y su imagen
+@app.put("/products/{product_id}", response_model=ProductResponse, tags=["productos"])
+async def update_product(
+    product_id: int,
+    name: str = Form(None),
+    description: str = Form(None),
+    price: float = Form(None),
+    sizes: str = Form(None),
+    colors: str = Form(None),
+    category: str = Form(None),
+    stock: int = Form(None),
+    image: UploadFile = File(None),  # Imagen opcional para actualizar
+    token: str = Depends(oauth2_scheme),
+    db: Session = Depends(get_db),
+):
+    # Verificar el token y el rol del usuario
     username = verify_token(token)
     user = db.query(User).filter(User.username == username).first()
     if user.role != "admin":
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Not enough permissions")
+
+    # Buscar el producto por ID
     db_product = db.query(Product).filter(Product.id == product_id).first()
-    if db_product is None:
+    if not db_product:
         raise HTTPException(status_code=404, detail="Product not found")
-    for key, value in product.dict().items():
-        setattr(db_product, key, value)
+
+    # Actualizar los campos del producto si se proporcionan
+    update_data = {
+        "name": name,
+        "description": description,
+        "price": price,
+        "sizes": sizes,
+        "colors": colors,
+        "category": category,
+        "stock": stock,
+    }
+    for key, value in update_data.items():
+        if value is not None:
+            setattr(db_product, key, value)
+
+    # Manejar la actualización de la imagen si se proporciona
+    if image:
+        # Guardar la nueva imagen en el servidor
+        file_location = f"{UPLOAD_FOLDER}{image.filename}"
+        with open(file_location, "wb") as file:
+            shutil.copyfileobj(image.file, file)
+
+        # Actualizar la URL de la imagen en la base de datos
+        db_product.image_url = file_location
+
+    # Confirmar los cambios en la base de datos
     db.commit()
     db.refresh(db_product)
+
     return db_product
 
 # Eliminar un producto
