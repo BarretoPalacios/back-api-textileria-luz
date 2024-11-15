@@ -22,7 +22,6 @@ origins = [
     "http://localhost:5173",
     "*",# Permitir acceso desde cualquier dominio (usarlo con precaución)
 ]
-
 # Añadir el middleware de CORS
 app.add_middleware(
     CORSMiddleware,
@@ -50,6 +49,8 @@ class ProductUpdate(BaseModel):
     colors: str  
     category : str
     stock : int
+
+
 
 class ProductCreate(BaseModel):
     name: str
@@ -83,14 +84,12 @@ def get_db():
 async def get_current_user(token: str = Depends(oauth2_scheme), db: Session = Depends(get_db)):
     # Verifica el token y obtiene el nombre de usuario
     username = verify_token(token)  
-    user = db.query(User).filter(User.username == username).first()
-    
+    user = db.query(User).filter(User.username == username).first() 
     if not user:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND, 
             detail="User not found"
         )
-
     # Devuelve información relevante del usuario (como su rol y correo)
     return {
         "id": user.id,
@@ -106,7 +105,6 @@ async def login_for_access_token(form_data: OAuth2PasswordRequestForm = Depends(
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Incorrect username or password")
     access_token = create_access_token(data={"sub": user.username}, expires_delta=timedelta(minutes=30))
     return {"access_token": access_token, "token_type": "bearer"}
-
 
 @app.post("/products/", response_model=ProductResponse,tags=["productos"])
 async def create_product(
@@ -125,7 +123,6 @@ async def create_product(
     user = db.query(User).filter(User.username == username).first()
     if user.role != "admin":
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Not enough permissions")
-
     # Guardar la imagen en el servidor
     file_location = f"{UPLOAD_FOLDER}{image.filename}"
     with open(file_location, "wb") as file:
@@ -150,7 +147,6 @@ async def create_product(
 @app.get("/products/", tags=["productos"])
 async def read_products(skip: int = 0, limit: int = 10, db: Session = Depends(get_db)):
     products = db.query(Product).offset(skip).limit(limit).all()
- 
     return {"count":len(products),"data":products}
 
 @app.get("/products/{id}", response_model=ProductResponse,tags=["productos"])
